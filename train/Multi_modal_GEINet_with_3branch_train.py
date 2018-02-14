@@ -17,7 +17,7 @@ from chainer.dataset import convert
 from chainer.dataset import iterator as iterator_module
 from chainer.functions.evaluation import accuracy
 import six
-from chainer.backends import cuda
+
 from sklearn.neighbors import KNeighborsClassifier
 import pandas as pd
 
@@ -25,18 +25,17 @@ import sys
 sys.path.append('/home/common-ns/PycharmProjects/Prepare')
 from tools import load_GEI
 sys.path.append('/home/common-ns/PycharmProjects/models')
-from Multi_modal_GEINet_with_5branch import Multi_modal_GEINet
+from Multi_modal_GEINet_with_3branch import Multi_modal_GEINet
 
 
 
 class Multi_modal_Updater(training.StandardUpdater):
-    def __init__(self, Mymodel, iterator1, iterator2, iterator3, iterator4, iterator5, optimizer, converter=convert.concat_examples,
+    def __init__(self, Mymodel, iterator1, iterator2, iterator3, optimizer, converter=convert.concat_examples,
                  device=None,
                  loss_func=None):
         super(Multi_modal_Updater, self).__init__(None, None)
         if isinstance(iterator1, iterator_module.Iterator):
-            iterator = {'main': iterator1, 'second': iterator2, 'third': iterator3, '4th': iterator4,
-                        '5th': iterator5}
+            iterator = {'main': iterator1, 'second': iterator2, 'third': iterator3}
             self._iterators = iterator
 
         if not isinstance(optimizer, dict):
@@ -55,43 +54,51 @@ class Multi_modal_Updater(training.StandardUpdater):
         self.loss = None
         self.accuracy = None
 
-
     def update_core(self):
         model = self.model
         batch1 = self._iterators['main'].next()
         batch2 = self._iterators['second'].next()
         batch3 = self._iterators['third'].next()
-        batch4 = self._iterators['4th'].next()
-        batch5 = self._iterators['5th'].next()
+
+        in_arrays1 = self.converter(batch1, self.device)
+        in_arrays2 = self.converter(batch2, self.device)
+        in_arrays3 = self.converter(batch3, self.device)
 
         optimizer = self._optimizers['main']
         loss_func = self.loss_func or optimizer.target
 
-        sum_acc = 0
-        accum_loss = 0
-        # 新しい勾配計算に入る前に、以前の蓄積勾配をクリアにしておく
-        model.cleargrads()
-        for i in range(0, len(batch1)):
-            # dataだけ取り出してgpuで計算
-            data1 = chainer.Variable(cuda.to_gpu(batch1[i][0].reshape((1, 3, 128, 88))))
-            data2 = chainer.Variable(cuda.to_gpu(batch2[i][0].reshape((1, 3, 128, 88))))
-            data3 = chainer.Variable(cuda.to_gpu(batch3[i][0].reshape((1, 3, 128, 88))))
-            data4 = chainer.Variable(cuda.to_gpu(batch4[i][0].reshape((1, 3, 128, 88))))
-            data5 = chainer.Variable(cuda.to_gpu(batch5[i][0].reshape((1, 3, 128, 88))))
+        if isinstance(in_arrays1, tuple):
+            # optimizer.update(loss_func, *in_arrays1)
+            # optimizer.update(loss_func, *in_arrays2)
 
-            # ラベルのみ取り出す。chainerのdataのbatch数(0次元目)とラベルのshapeを擬似的に統一
-            # この処理を加えないとtype_check関数で怒られる
-            label = np.array(batch1[i][1]).reshape((1,))
-            label = cuda.to_gpu(label)
-            output = model(data1, data2, data3, data4, data5)
-            loss = F.softmax_cross_entropy(output, label)
-            accum_loss += loss
-            sum_acc += self.accfun(output, label)
+            # mini_batch_list = [in_arrays1[0], in_arrays2[0], in_arrays1[1]]
+            # optimizer.update(loss_func, mini_batch_list)
+            # mini_batch_list = []
+
+            y = model(in_arrays1[0], in_arrays2[0], in_arrays3[0])
+            loss = F.softmax_cross_entropy(y, in_arrays1[1])
+            # print("loss = " + str(loss.data))
+            #   print ("re")
+            acc = self.accfun(y, in_arrays1[1])
+            reporter.report({'accuracy': acc, 'loss': loss})
+
+            # calc = int(self.epoch) % 20
+
+            # if self.epoch == 20:
+            #      print('epoch:{:02d}   main/accuracy:{:.09}   main/loss:{:.09}'.format(
+            #         self.epoch, accuracy.data, loss.data))
+
+            model.cleargrads()
             loss.backward()
+            optimizer.update()
+            # print(str(count))
 
-        reporter.report({'accuracy': sum_acc / len(batch1[0]), 'loss': accum_loss})
-
-        optimizer.update()
+        elif isinstance(in_arrays1, dict):
+            optimizer.update(loss_func, **in_arrays1)
+            optimizer.update(loss_func, **in_arrays2)
+        else:
+            optimizer.update(loss_func, in_arrays1)
+            optimizer.update(loss_func, in_arrays2)
 
 # ここでは使ってない
 class MyClasifier(chainer.Chain):
@@ -118,20 +125,14 @@ class MyClasifier(chainer.Chain):
 # train model
 def train(mode):
 
-    Dt1_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt1/CV01_Dt1_(Gallery&Probe)"
+    Dt1_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_(Gallery&Probe)_2nd"
     train1 = load_GEI(path_dir=Dt1_train_dir, mode=True)
 
-    Dt2_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt2/CV01_Dt2_(Gallery&Probe)"
+    Dt2_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt2_(Gallery&Probe)"
     train2 = load_GEI(path_dir=Dt2_train_dir, mode=True)
 
-    Dt3_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt3/CV01_Dt3_(Gallery&Probe)"
+    Dt3_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt3_(Gallery&Probe)"
     train3 = load_GEI(path_dir=Dt3_train_dir, mode=True)
-
-    Dt4_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt4/CV01_Dt4_(Gallery&Probe)"
-    train4 = load_GEI(path_dir=Dt4_train_dir, mode=True)
-
-    Dt5_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt5/CV01_Dt5_(Gallery&Probe)"
-    train5 = load_GEI(path_dir=Dt5_train_dir, mode=True)
 
     model = Multi_modal_GEINet()
 
@@ -141,8 +142,6 @@ def train(mode):
     Dt1_train_iter = iterators.SerialIterator(train1, batch_size=239, shuffle=False)
     Dt2_train_iter = iterators.SerialIterator(train2, batch_size=239, shuffle=False)
     Dt3_train_iter = iterators.SerialIterator(train3, batch_size=239, shuffle=False)
-    Dt4_train_iter = iterators.SerialIterator(train4, batch_size=239, shuffle=False)
-    Dt5_train_iter = iterators.SerialIterator(train5, batch_size=239, shuffle=False)
 
 
     # optimizer = chainer.optimizers.SGD(lr=0.02)
@@ -151,12 +150,11 @@ def train(mode):
     optimizer.add_hook(chainer.optimizer.WeightDecay(0.01))
 
     # updater = training.ParallelUpdater(train_iter, optimizer, devices={'main': 0, 'second': 1})
-    updater = Multi_modal_Updater(model, Dt1_train_iter, Dt2_train_iter, Dt3_train_iter,
-                                  Dt4_train_iter, Dt5_train_iter, optimizer, device=0)
+    updater = Multi_modal_Updater(model, Dt1_train_iter, Dt2_train_iter, Dt3_train_iter,  optimizer, device=0)
     epoch = 6250
 
     trainer = training.Trainer(updater, (epoch, 'epoch'),
-                               out='/home/common-ns/setoguchi/chainer_files/result')
+                               out='/home/wutong/Setoguchi/chainer_files/result')
 
     # trainer.extend(extensions.Evaluator(test_iter, model, device=0))
     trainer.extend(extensions.ExponentialShift(attr='lr', rate=0.56234), trigger=(1250, 'epoch'))

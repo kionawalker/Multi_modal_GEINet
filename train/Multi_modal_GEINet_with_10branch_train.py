@@ -25,18 +25,20 @@ import sys
 sys.path.append('/home/common-ns/PycharmProjects/Prepare')
 from tools import load_GEI
 sys.path.append('/home/common-ns/PycharmProjects/models')
-from Multi_modal_GEINet_with_5branch import Multi_modal_GEINet
+from Multi_modal_GEINet_with_10branch import Multi_modal_GEINet
 
 
 
 class Multi_modal_Updater(training.StandardUpdater):
-    def __init__(self, Mymodel, iterator1, iterator2, iterator3, iterator4, iterator5, optimizer, converter=convert.concat_examples,
+    def __init__(self, Mymodel, iterator1, iterator2, iterator3, iterator4, iterator5,
+                 iterator6, iterator7, iterator8, iterator9, iterator10, optimizer, converter=convert.concat_examples,
                  device=None,
                  loss_func=None):
         super(Multi_modal_Updater, self).__init__(None, None)
         if isinstance(iterator1, iterator_module.Iterator):
             iterator = {'main': iterator1, 'second': iterator2, 'third': iterator3, '4th': iterator4,
-                        '5th': iterator5}
+                        '5th': iterator5, '6th': iterator6, '7th': iterator7, '8th': iterator8,
+                        '9th': iterator9, '10th': iterator10}
             self._iterators = iterator
 
         if not isinstance(optimizer, dict):
@@ -55,7 +57,6 @@ class Multi_modal_Updater(training.StandardUpdater):
         self.loss = None
         self.accuracy = None
 
-
     def update_core(self):
         model = self.model
         batch1 = self._iterators['main'].next()
@@ -63,6 +64,11 @@ class Multi_modal_Updater(training.StandardUpdater):
         batch3 = self._iterators['third'].next()
         batch4 = self._iterators['4th'].next()
         batch5 = self._iterators['5th'].next()
+        batch6 = self._iterators['6th'].next()
+        batch7 = self._iterators['7th'].next()
+        batch8 = self._iterators['8th'].next()
+        batch9 = self._iterators['9th'].next()
+        batch10 = self._iterators['10th'].next()
 
         optimizer = self._optimizers['main']
         loss_func = self.loss_func or optimizer.target
@@ -78,12 +84,17 @@ class Multi_modal_Updater(training.StandardUpdater):
             data3 = chainer.Variable(cuda.to_gpu(batch3[i][0].reshape((1, 3, 128, 88))))
             data4 = chainer.Variable(cuda.to_gpu(batch4[i][0].reshape((1, 3, 128, 88))))
             data5 = chainer.Variable(cuda.to_gpu(batch5[i][0].reshape((1, 3, 128, 88))))
+            data6 = chainer.Variable(cuda.to_gpu(batch6[i][0].reshape((1, 3, 128, 88))))
+            data7 = chainer.Variable(cuda.to_gpu(batch7[i][0].reshape((1, 3, 128, 88))))
+            data8 = chainer.Variable(cuda.to_gpu(batch8[i][0].reshape((1, 3, 128, 88))))
+            data9 = chainer.Variable(cuda.to_gpu(batch9[i][0].reshape((1, 3, 128, 88))))
+            data10 = chainer.Variable(cuda.to_gpu(batch10[i][0].reshape((1, 3, 128, 88))))
 
             # ラベルのみ取り出す。chainerのdataのbatch数(0次元目)とラベルのshapeを擬似的に統一
             # この処理を加えないとtype_check関数で怒られる
             label = np.array(batch1[i][1]).reshape((1,))
             label = cuda.to_gpu(label)
-            output = model(data1, data2, data3, data4, data5)
+            output = model(data1, data2, data3, data4, data5, data6, data7, data8, data9, data10)
             loss = F.softmax_cross_entropy(output, label)
             accum_loss += loss
             sum_acc += self.accfun(output, label)
@@ -118,20 +129,35 @@ class MyClasifier(chainer.Chain):
 # train model
 def train(mode):
 
-    Dt1_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt1/CV01_Dt1_(Gallery&Probe)"
+    Dt1_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_(Gallery&Probe)_2nd"
     train1 = load_GEI(path_dir=Dt1_train_dir, mode=True)
 
-    Dt2_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt2/CV01_Dt2_(Gallery&Probe)"
+    Dt2_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt2_(Gallery&Probe)"
     train2 = load_GEI(path_dir=Dt2_train_dir, mode=True)
 
-    Dt3_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt3/CV01_Dt3_(Gallery&Probe)"
+    Dt3_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt3_(Gallery&Probe)"
     train3 = load_GEI(path_dir=Dt3_train_dir, mode=True)
 
-    Dt4_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt4/CV01_Dt4_(Gallery&Probe)"
+    Dt4_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt4_(Gallery&Probe)"
     train4 = load_GEI(path_dir=Dt4_train_dir, mode=True)
 
-    Dt5_train_dir = "/media/common-ns/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01/Dt5/CV01_Dt5_(Gallery&Probe)"
+    Dt5_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt5_(Gallery&Probe)"
     train5 = load_GEI(path_dir=Dt5_train_dir, mode=True)
+
+    Dt6_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt6_(Gallery&Probe)"
+    train6 = load_GEI(path_dir=Dt6_train_dir, mode=True)
+
+    Dt7_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt7_(Gallery&Probe)"
+    train7 = load_GEI(path_dir=Dt7_train_dir, mode=True)
+
+    Dt8_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt8_(Gallery&Probe)"
+    train8 = load_GEI(path_dir=Dt8_train_dir, mode=True)
+
+    Dt9_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt9_(Gallery&Probe)"
+    train9 = load_GEI(path_dir=Dt9_train_dir, mode=True)
+
+    Dt10_train_dir = "/media/wutong/New Volume/reseach/Dataset/OU-ISIR_by_Setoguchi/Gallery/signed/128_3ch/CV01_Dt10_(Gallery&Probe)"
+    train10 = load_GEI(path_dir=Dt10_train_dir, mode=True)
 
     model = Multi_modal_GEINet()
 
@@ -143,6 +169,11 @@ def train(mode):
     Dt3_train_iter = iterators.SerialIterator(train3, batch_size=239, shuffle=False)
     Dt4_train_iter = iterators.SerialIterator(train4, batch_size=239, shuffle=False)
     Dt5_train_iter = iterators.SerialIterator(train5, batch_size=239, shuffle=False)
+    Dt6_train_iter = iterators.SerialIterator(train6, batch_size=239, shuffle=False)
+    Dt7_train_iter = iterators.SerialIterator(train7, batch_size=239, shuffle=False)
+    Dt8_train_iter = iterators.SerialIterator(train8, batch_size=239, shuffle=False)
+    Dt9_train_iter = iterators.SerialIterator(train9, batch_size=239, shuffle=False)
+    Dt10_train_iter = iterators.SerialIterator(train10, batch_size=239, shuffle=False)
 
 
     # optimizer = chainer.optimizers.SGD(lr=0.02)
@@ -152,11 +183,12 @@ def train(mode):
 
     # updater = training.ParallelUpdater(train_iter, optimizer, devices={'main': 0, 'second': 1})
     updater = Multi_modal_Updater(model, Dt1_train_iter, Dt2_train_iter, Dt3_train_iter,
-                                  Dt4_train_iter, Dt5_train_iter, optimizer, device=0)
+                                  Dt4_train_iter, Dt5_train_iter, Dt6_train_iter, Dt7_train_iter,
+                                  Dt8_train_iter, Dt9_train_iter, Dt10_train_iter, optimizer, device=0)
     epoch = 6250
 
     trainer = training.Trainer(updater, (epoch, 'epoch'),
-                               out='/home/common-ns/setoguchi/chainer_files/result')
+                               out='/home/wutong/Setoguchi/chainer_files/result')
 
     # trainer.extend(extensions.Evaluator(test_iter, model, device=0))
     trainer.extend(extensions.ExponentialShift(attr='lr', rate=0.56234), trigger=(1250, 'epoch'))
